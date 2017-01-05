@@ -131,6 +131,7 @@ void loop()
     while (!buttonSense)
     {
       proxSensors.read();
+      delay(20);
       lcd.gotoXY(0, 0);
       printBar(proxSensors.countsLeftWithLeftLeds());
       printBar(proxSensors.countsLeftWithRightLeds());

@@ -21,53 +21,48 @@ const uint16_t scanTimeMax = 2100;
 const uint16_t waitTime = 5000;
 const uint16_t stalemateTime = 4000;
 uint16_t stateStartTime;
-uint16_t accSpeed=100;
+uint16_t accSpeed;
 uint16_t displayTime;
 uint8_t sum ;
 int8_t diff ;
+int sense;
 bool justChangedState;
 bool displayCleared;
-bool proxLeftActive;
-bool proxFrontActive;
-bool proxRightActive;
-
+bool unspeed;
 enum State
 {
   StateScanning,
   StatePausing,
   StateWaiting,
   StateDriving,
-  StateBacking,
-  StateSense
+  StateSense,
+  StateBacking
 };
 
 State state = StatePausing;
-
-
 void setup()
 {
+//  serial.begin(115200);
   proxSensors.initThreeSensors();
-  lineSensors.initThreeSensors();
-  changeState(StatePausing);
   loadCustomCharacters();
+  changeState(StatePausing);
 }
 
 
 
 void loop()
 {
-  //bool buttonPress = buttonC.getSingleDebouncedPress();
   bool buttonSense = buttonB.getSingleDebouncedPress();
   bool buttonPress = buttonA.getSingleDebouncedPress();
+  bool usbPower = usbPowerPresent();
+  uint16_t batteryLevel = readBatteryMillivolts();
   if (state == StatePausing)
   {
     motors.setSpeeds(0, 0);
     if (justChangedState)
         {
           justChangedState = false;
-          lcd.gotoXY(0,0);
-          lcd.print("A/B/C");
-          
+          lcd.print(F("Press A"));
         }
 
     if (displayIsStale(100))
@@ -82,31 +77,22 @@ void loop()
         // The user pressed button B, so go to the waiting state.
         changeState(StateSense);
       }
-
-    else if (buttonPress)
+    if (buttonPress)
       {
         // The user pressed button A, so go to the waiting state.
         changeState(StateWaiting);
       }
-      
   }
-  else if (buttonPress || buttonSense)
+  else if (buttonPress)
   {
-    // The user pressed button A while the robot was running, so pause.
     changeState(StatePausing);
   }
   else if (state == StateWaiting)
   {
-    // In this state, we wait for a while and then move on to the
-    // scanning state.
-
     motors.setSpeeds(0, 0);
-
     uint16_t time = timeInThisState();
-
     if (time < waitTime)
     {
-      // Display the remaining time we have to wait.
       uint16_t timeLeft = waitTime - time;
       lcd.gotoXY(0, 0);
       lcd.print(timeLeft / 1000 % 10);
@@ -115,215 +101,173 @@ void loop()
     }
     else
     {
-      // We have waited long enough.  Start moving.
       changeState(StateScanning);
     }
   }
-  else if (state == StateSense)
-  {
-       if (justChangedState)
-    {
-      justChangedState = false;
-      lcd.print("sense");
-    }
-
-    motors.setSpeeds(0, 0);
-    while (!buttonSense)
-    {
-      proxSensors.read();
-      delay(20);
-      lcd.gotoXY(0, 0);
-      printBar(proxSensors.countsLeftWithLeftLeds());
-      printBar(proxSensors.countsLeftWithRightLeds());
-      lcd.print(' ');
-      printBar(proxSensors.countsFrontWithLeftLeds());
-      printBar(proxSensors.countsFrontWithRightLeds());
-      lcd.print(' ');
-      printBar(proxSensors.countsRightWithLeftLeds());
-      printBar(proxSensors.countsRightWithRightLeds());
-      lcd.gotoXY(0, 1);
-      lcd.print(proxSensors.countsLeftWithLeftLeds());
-      lcd.print(proxSensors.countsLeftWithRightLeds());
-      lcd.print(' ');
-      lcd.print(proxSensors.countsFrontWithLeftLeds());
-      lcd.print(proxSensors.countsFrontWithRightLeds());
-      lcd.print(' ');
-      lcd.print(proxSensors.countsRightWithLeftLeds());
-      lcd.print(proxSensors.countsRightWithRightLeds());
-    }
-    
-    
-  }
-
-  
   else if (state == StateBacking)
   {
-    // In this state, the robot drives in reverse.
-
     if (justChangedState)
-    {
-      justChangedState = false;
-      lcd.print(F("back"));
-    }
+        {
+          justChangedState = false;
+          lcd.gotoXY(3,1);
+          lcd.print("b");
+          lcd.gotoXY(6,1);
+          lcd.print("b");   
+        }
+    unspeed =false;
     ledRed(1);
     motors.setSpeeds(-reverseSpeed, -reverseSpeed);
-
-    // After backing up for a specific amount of time, start
-    // scanning.
     if (timeInThisState() >= reverseTime)
     {
       changeState(StateScanning);
     }
   }
-  else if (state == StateScanning)
-      {
-        if(justChangedState)
+        else if (state == StateSense)
           {
-            justChangedState = false;
-            lcd.gotoXY(0, 0);
-            printBar(proxSensors.countsLeftWithLeftLeds());
-            printBar(proxSensors.countsLeftWithRightLeds());
-            lcd.print(' ');
-            printBar(proxSensors.countsFrontWithLeftLeds());
-            printBar(proxSensors.countsFrontWithRightLeds());
-            lcd.print(' ');
-            printBar(proxSensors.countsRightWithLeftLeds());
-            printBar(proxSensors.countsRightWithRightLeds());
-            lcd.gotoXY(0, 1);
-            lcd.print(proxSensors.countsLeftWithLeftLeds());
-            lcd.print(proxSensors.countsLeftWithRightLeds());
-            lcd.print(' ');
-            lcd.print(proxSensors.countsFrontWithLeftLeds());
-            lcd.print(proxSensors.countsFrontWithRightLeds());
-            lcd.print(' ');
-            lcd.print(proxSensors.countsRightWithLeftLeds());
-            lcd.print(proxSensors.countsRightWithRightLeds());
-          }
-        proxSensors.read();
-        sum = proxSensors.countsFrontWithRightLeds() + proxSensors.countsFrontWithLeftLeds();
-        diff = proxSensors.countsFrontWithRightLeds() - proxSensors.countsFrontWithLeftLeds();
-        //rsum = proxSensors.countsFrontWithRightLeds() + proxSensors.countsRightWithLeftLeds();
-        //lsum = 
-
-        changeState(StateDriving);
-      }
-
-
+               if (justChangedState)
+                  {
+                    justChangedState = false;
+                    lcd.print(F("sense"));
+                  }
           
-  
-   else if (state == StateDriving)
+              motors.setSpeeds(0, 0);
+              if(buttonSense)
+              sense++;
+              while(sense%2)
+              {
+                      proxSensors.read();
+                      delay(20);
+                      lcd.gotoXY(0, 0);
+                      printBar(proxSensors.countsLeftWithLeftLeds());
+                      printBar(proxSensors.countsLeftWithRightLeds());
+                      lcd.print(' ');
+                      printBar(proxSensors.countsFrontWithLeftLeds());
+                      printBar(proxSensors.countsFrontWithRightLeds());
+                      lcd.print(' ');
+                      printBar(proxSensors.countsRightWithLeftLeds());
+                      printBar(proxSensors.countsRightWithRightLeds());
+                      lcd.gotoXY(0, 1);
+                      lcd.print(proxSensors.countsLeftWithLeftLeds());
+                      lcd.print(proxSensors.countsLeftWithRightLeds());
+                      lcd.print(' ');
+                      lcd.print(proxSensors.countsFrontWithLeftLeds());
+                      lcd.print(proxSensors.countsFrontWithRightLeds());
+                      lcd.print(' ');
+                      lcd.print(proxSensors.countsRightWithLeftLeds());
+                      lcd.print(proxSensors.countsRightWithRightLeds());
+                      if(buttonSense)
+                      sense++;
+                    }
+                    
+              changeState(StatePausing);
+          }
+          
+  else if (state == StateScanning)
+        {
+         if(justChangedState)
+              {
+              justChangedState = false;
+              lcd.gotoXY(0, 0);
+              printBar(proxSensors.countsLeftWithLeftLeds());
+              printBar(proxSensors.countsLeftWithRightLeds());
+              lcd.print(' ');
+              printBar(proxSensors.countsFrontWithLeftLeds());
+              printBar(proxSensors.countsFrontWithRightLeds());
+              lcd.print(' ');
+              printBar(proxSensors.countsRightWithLeftLeds());
+              printBar(proxSensors.countsRightWithRightLeds());
+              lcd.gotoXY(0, 1);
+              lcd.print(proxSensors.countsLeftWithLeftLeds());
+              lcd.print(proxSensors.countsLeftWithRightLeds());
+              lcd.print(' ');
+              lcd.print(proxSensors.countsFrontWithLeftLeds());
+              lcd.print(proxSensors.countsFrontWithRightLeds());
+              lcd.print(' ');
+              lcd.print(proxSensors.countsRightWithLeftLeds());
+              lcd.print(proxSensors.countsRightWithRightLeds());
+              }
+        proxSensors.read();
+        sum   =   proxSensors.countsFrontWithRightLeds()+proxSensors.countsFrontWithLeftLeds();
+        diff  =   proxSensors.countsFrontWithRightLeds()-proxSensors.countsFrontWithLeftLeds();
+        /*rsum  =   proxSensors.countsFrontWithRightLeds()+proxSensors.countsLeftWithRightLeds();
+        lsum  =   proxSensors.countsFrontWithLeftLeds()+proxSensors.countsRightWithLeftLeds();
+        rrsum =   proxSensors.countsRightWithRightLeds()+proxSensors.countsRightWithLeftLeds();
+        llsum =   proxSensors.countsLeftWithLeftLeds()+proxSensors.countsLeftWithRightLeds();
+        rldiff  = rsum - lsum;
+        */
+        changeState(StateDriving);
+        }
+else if (state == StateDriving)
       {
-        if(justChangedState)
+       if(4>=sum){
+          if(justChangedState)
           {
             justChangedState = false;
-            lcd.print("drv");
+            lcd.gotoXY(3,1);
+            lcd.print("F");
+            lcd.gotoXY(6,1);
+            lcd.print("F");          
+           }
+        if(!unspeed)
+          {
+            accSpeed=100;
           }
-          if(0==sum)
-          {
-          if (justChangedState)
-            {
-              justChangedState = false;
-              lcd.gotoXY(0,0);
-              lcd.print("full");
-            }
-            ledGreen(1);
-            motors.setSpeeds(fullSpeed, fullSpeed);
-            changeState(StateScanning);
-         }
-        else if(4>sum && diff==0) //|| ((proxSensors.countsRightWithLeftLeds() <=4) && (proxSensors.countsFrontWithLeftLeds()<=5)) ||  ((proxSensors.countsLeftWithRightLeds() <=4) && (proxSensors.countsFrontWithRightLeds()<=5))|| (( proxSensors.countsLeftWithLeftLeds()>=5) && (proxSensors.countsFrontWithLeftLeds()<=4 )) || ((proxSensors.countsRightWithRightLeds()>=5) && (proxSensors.countsFrontWithRightLeds()<=4)) )
-          {
-          if (justChangedState)
-            {
-              justChangedState = false;
-              lcd.gotoXY(0,0);
-              lcd.print("accel");
-            }
-            ledGreen(1);
-            accSpeed++;
-            motors.setSpeeds(accSpeed, accSpeed);
-            changeState(StateScanning);
-         }
-        
-        
-        else if(diff>=0)  /// linksfahren
-        {
-         if(proxSensors.countsFrontWithRightLeds()>=5)
+          if (accSpeed<fullSpeed )
+              {
+                accSpeed++;
+              }
+          ledGreen(1);
+          ledYellow(0);
+          ledRed(1); 
+          unspeed=true;
+          motors.setSpeeds(accSpeed, accSpeed);
+          changeState(StateScanning);
+          }     
+ else if(diff>=1 ||proxSensors.countsRightWithLeftLeds() > proxSensors.countsLeftWithRightLeds() || proxSensors.countsRightWithRightLeds()> proxSensors.countsLeftWithLeftLeds())
             {
             if (justChangedState)
                   {
                     justChangedState = false;
-                    lcd.gotoXY(0,0);
-                    lcd.print("lele");
+                    lcd.gotoXY(2,1);
+                    lcd.print("l");
                   }
-                ledYellow(1);
-                motors.setSpeeds(-turnSpeed, turnSpeed);
-                changeState(StateScanning);
-                }
-        else if(proxSensors.countsFrontWithRightLeds()<5)
-          {
-          if (justChangedState)
-            {
-              justChangedState = false;
-              lcd.gotoXY(0,0);
-              lcd.print("le");
+            
+            ledGreen(0);
+            ledYellow(1);
+            ledRed(1);
+            unspeed=false;
+            motors.setSpeeds(veerSpeedLow, veerSpeedHigh);
+            changeState(StateScanning);
             }
-           ledYellow(1);
-           motors.setSpeeds(veerSpeedLow, veerSpeedHigh);
-           changeState(StateScanning);
-          }
-        }
-        
-        
-        
-        else if(diff<= 0) /// rechtsfahren
+ else if(diff<= -1 ||proxSensors.countsLeftWithRightLeds() > proxSensors.countsRightWithLeftLeds() || proxSensors.countsLeftWithLeftLeds()> proxSensors.countsRightWithRightLeds())
+            {
+            if (justChangedState)
+                    {
+                       justChangedState = false;
+                       lcd.gotoXY(5,1);
+                       lcd.print("r");                  
+                     }
+            ledGreen(1);
+            ledYellow(1);
+            ledRed(1);
+            unspeed=false;
+            motors.setSpeeds(veerSpeedHigh, veerSpeedLow);
+            changeState(StateScanning);
+            }
+        else               
         {
-         if (proxSensors.countsFrontWithLeftLeds()>=5)
-              {
                 if (justChangedState)
                     {
-                      justChangedState = false;                      
-                      lcd.gotoXY(0,0);
-                      lcd.print("riri");
+                     justChangedState = false;                      
+                     lcd.print("scan");
                     }
-                    ledYellow(1);                   
-                    motors.setSpeeds(turnSpeed, -turnSpeed);
-                    changeState(StateScanning);
-                    }
-        else if(proxSensors.countsFrontWithLeftLeds()<5)
-         {
-              if (justChangedState)
-                  {
-                    justChangedState = false;
-                    lcd.gotoXY(0,0);
-                    lcd.print("ri");
-                  }
-                  ledYellow(1);
-                  motors.setSpeeds(veerSpeedHigh, veerSpeedLow);
-                  changeState(StateScanning);
-                  }
-          }
-          else               
-                {
-                  if (justChangedState)
-                      {
-                       justChangedState = false;                      
-                       lcd.gotoXY(0,0);
-                       lcd.print("emp");
-                      }
-                      
-                      ledRed(1);
-                      ledYellow(1);
-                      ledGreen(1);
-                      delay(100);
-                      ledRed(0);
-                      ledYellow(0);
-                      ledGreen(0);
-                      delay(100);
-                  changeState(StateScanning);
-                 }
-              }
+                unspeed=false;
+                changeState(StateBacking);
+           }
+                 
       }
- 
+  }
+
 
  
 
@@ -369,7 +313,6 @@ void displayUpdated()
   displayTime = millis();
   displayCleared = false;
 }
-
 
 void loadCustomCharacters()
 {

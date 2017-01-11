@@ -54,8 +54,6 @@ void loop()
 {
   bool buttonSense = buttonB.getSingleDebouncedPress();
   bool buttonPress = buttonA.getSingleDebouncedPress();
-  bool usbPower = usbPowerPresent();
-  uint16_t batteryLevel = readBatteryMillivolts();
   if (state == StatePausing)
   {
     motors.setSpeeds(0, 0);
@@ -74,12 +72,10 @@ void loop()
 
     if (buttonSense)
       {
-        // The user pressed button B, so go to the waiting state.
         changeState(StateSense);
       }
     if (buttonPress)
       {
-        // The user pressed button A, so go to the waiting state.
         changeState(StateWaiting);
       }
   }
@@ -103,6 +99,7 @@ void loop()
     {
       changeState(StateScanning);
     }
+  
   }
   else if (state == StateBacking)
   {
@@ -127,13 +124,21 @@ void loop()
                if (justChangedState)
                   {
                     justChangedState = false;
-                    lcd.print(F("sense"));
+                    bool usbPower = usbPowerPresent();
+                    uint16_t batteryLevel = readBatteryMillivolts();
+                    lcd.clear();
+                    lcd.print(F("B="));
+                    lcd.print(batteryLevel);
+                    lcd.print(F("mV   "));
+                    lcd.gotoXY(0, 1);
+                    lcd.print(F("USB="));
+                    lcd.print(usbPower ? 'Y' : 'N');
+                    delay(200);
                   }
-          
               motors.setSpeeds(0, 0);
               if(buttonSense)
               sense++;
-              while(sense%2)
+              if(sense%2)
               {
                       proxSensors.read();
                       delay(20);
@@ -156,7 +161,9 @@ void loop()
                       lcd.print(proxSensors.countsRightWithLeftLeds());
                       lcd.print(proxSensors.countsRightWithRightLeds());
                       if(buttonSense)
+                      {
                       sense++;
+                      }
                     }
                     
               changeState(StatePausing);
@@ -199,7 +206,7 @@ void loop()
         }
 else if (state == StateDriving)
       {
-       if(4>=sum){
+       if(6>=sum){
           if(justChangedState)
           {
             justChangedState = false;
@@ -217,13 +224,13 @@ else if (state == StateDriving)
                 accSpeed++;
               }
           ledGreen(1);
-          ledYellow(0);
-          ledRed(1); 
+          ledYellow(1);
+          ledRed(0); 
           unspeed=true;
           motors.setSpeeds(accSpeed, accSpeed);
           changeState(StateScanning);
           }     
- else if(diff>=1 ||proxSensors.countsRightWithLeftLeds() > proxSensors.countsLeftWithRightLeds() || proxSensors.countsRightWithRightLeds()> proxSensors.countsLeftWithLeftLeds())
+ else if(diff>=1 || ( 3<= proxSensors.countsLeftWithRightLeds()&& (proxSensors.countsRightWithLeftLeds() > proxSensors.countsLeftWithRightLeds())) || (proxSensors.countsRightWithRightLeds() > proxSensors.countsLeftWithLeftLeds()))
             {
             if (justChangedState)
                   {
@@ -239,7 +246,7 @@ else if (state == StateDriving)
             motors.setSpeeds(veerSpeedLow, veerSpeedHigh);
             changeState(StateScanning);
             }
- else if(diff<= -1 ||proxSensors.countsLeftWithRightLeds() > proxSensors.countsRightWithLeftLeds() || proxSensors.countsLeftWithLeftLeds()> proxSensors.countsRightWithRightLeds())
+ else if(diff<= -1 ||(3<=proxSensors.countsRightWithLeftLeds()&&(proxSensors.countsLeftWithRightLeds() > proxSensors.countsRightWithLeftLeds())) || (proxSensors.countsLeftWithLeftLeds()> proxSensors.countsRightWithRightLeds() ))
             {
             if (justChangedState)
                     {
